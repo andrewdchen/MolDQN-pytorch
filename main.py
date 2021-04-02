@@ -6,6 +6,7 @@ import math
 import utils
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+import os
 
 TENSORBOARD_LOG = True
 TB_LOG_PATH = "./runs/dqn/run2"
@@ -15,8 +16,10 @@ update_interval = 20
 batch_size = 128
 num_updates_per_it = 1
 
+os.makedirs('molecule_gen', exist_ok=True)
+
 if torch.cuda.is_available():
-    device = torch.device("cuda")
+    device = torch.device("cuda:1")
 else:
     device = torch.device("cpu")
 
@@ -30,6 +33,7 @@ environment = DockingRewardMolecule(
     allowed_ring_sizes=set(hyp.allowed_ring_sizes),
     max_steps=hyp.max_steps_per_episode,
     surrogate_model_path=hyp.surrogate_model_path,
+    device = device,
 )
 
 # environment = QEDRewardMolecule(
@@ -153,3 +157,75 @@ for it in range(iterations):
             loss = agent.update_params(batch_size, hyp.gamma, hyp.polyak)
             loss = loss.item()
             batch_losses.append(loss)
+
+# Evaluation loop
+num_done = 0
+while True:
+
+    # Compute a list of all possible valid actions. (Here valid_actions stores the states after taking the possible actions)
+    valid_actions = list(environment.get_valid_actions())
+
+    # Append each valid action to steps_left and store in observations.
+    observations = np.vstack(
+        [
+            np.append(
+                utils.get_fingerprint(
+                    act, hyp.fingerprint_length, hyp.fingerprint_radius
+                ),
+                steps_left,
+            )
+            for act in valid_actions
+        ]
+    )  # (num_actions, fingerprint_length)
+
+    observations_tensor = torch.Tensor(observations)
+    # Get action through epsilon-greedy policy with the following scheduler.
+    # eps_threshold = hyp.epsilon_end + (hyp.epsilon_start - hyp.epsilon_end) * \
+    #     math.exp(-1. * it / hyp.epsilon_decay)
+
+    a = agent.get_action(observations_tensor, eps_threshold)
+
+    # Find out the new state (we store the new state in "action" here. Bit confusing but taken from original implementation)
+    action = valid_actions[a]
+    # Take a step based on the action
+    result = environment.step(action)
+
+    action_fingerprint = np.append(
+        utils.get_fingerprint(action, hyp.fingerprint_length, hyp.fingerprint_radius),
+        steps_left,
+    )
+
+    next_state, reward, done = result
+
+    # Compute number of steps left
+    steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
+
+    # Append steps_left to the new state and store in next_state
+    next_state = utils.get_fingerprint(
+        next_state, hyp.fingerprint_length, hyp.fingerprint_radius
+    )  # (fingerprint_length)
+
+    action_fingerprints = np.vstack(
+        [
+            np.append(
+                utils.get_fingerprint(
+                    act, hyp.fingerprint_length, hyp.fingerprint_radius
+                ),
+                steps_left,
+            )
+            for act in environment.get_valid_actions()
+        ]
+    )  # (num_actions, fingerprint_length + 1)
+
+    if done:
+        final_reward = reward
+
+        with open('molecule_gen/' + hyp.name + '.csv', 'a') as f:
+            row = ''.join(['{},'] * 2)[:-1] + '\n'
+            f.write(row.format(next_state, final_reward))
+
+        num_done += 1
+        environment.initialize()
+
+    if num_done == hyp.num_eval:
+        break

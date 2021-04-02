@@ -35,7 +35,7 @@ def get_final_reward(state, env, surrogate_model, device):
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the QED."""
 
-    def __init__(self, discount_factor, surrogate_model_path, **kwargs):
+    def __init__(self, discount_factor, surrogate_model_path, device, **kwargs):
         """Initializes the class.
 
         Args:
@@ -47,9 +47,10 @@ class DockingRewardMolecule(Molecule):
             this encourages exploration with emphasis on long term rewards.
           **kwargs: The keyword arguments passed to the base class.
         """
-        super(QEDRewardMolecule, self).__init__(**kwargs)
+        super(DockingRewardMolecule, self).__init__(**kwargs)
         self.discount_factor = discount_factor
-        self.surrogate_model = load_surrogate_model("", "", surrogate_model_path)
+        self.surrogate_model = load_surrogate_model("", "", surrogate_model_path, device)
+        self.device = device
 
     def _reward(self):
         """Reward of a state.
@@ -60,7 +61,7 @@ class DockingRewardMolecule(Molecule):
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        return get_final_reward(molecule, None, self.surrogate_model)
+        return get_final_reward(molecule, None, self.surrogate_model, self.device)
 
 
 class QEDRewardMolecule(Molecule):
