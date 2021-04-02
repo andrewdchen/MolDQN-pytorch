@@ -16,3 +16,4 @@ gamma = 0.95
 fingerprint_radius = 3
 fingerprint_length = 2048
 discount_factor = 0.9
+surrogate_model_path = "/clusterfs/csdata/data/surrogate_models/NSP15_combined1_upsample/predict_logp/best_model.pth"

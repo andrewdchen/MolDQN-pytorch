@@ -1,6 +1,6 @@
 import torch
 from agent import Agent
-from agent import QEDRewardMolecule, Agent
+from agent import DockingRewardMolecule, Agent
 import hyp
 import math
 import utils
@@ -20,7 +20,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-environment = QEDRewardMolecule(
+environment = DockingRewardMolecule(
     discount_factor=hyp.discount_factor,
     atom_types=set(hyp.atom_types),
     init_mol=hyp.start_molecule,
@@ -29,7 +29,19 @@ environment = QEDRewardMolecule(
     allow_bonds_between_rings=hyp.allow_bonds_between_rings,
     allowed_ring_sizes=set(hyp.allowed_ring_sizes),
     max_steps=hyp.max_steps_per_episode,
+    surrogate_model_path=hyp.surrogate_model_path,
 )
+
+# environment = QEDRewardMolecule(
+#     discount_factor=hyp.discount_factor,
+#     atom_types=set(hyp.atom_types),
+#     init_mol=hyp.start_molecule,
+#     allow_removal=hyp.allow_removal,
+#     allow_no_modification=hyp.allow_no_modification,
+#     allow_bonds_between_rings=hyp.allow_bonds_between_rings,
+#     allowed_ring_sizes=set(hyp.allowed_ring_sizes),
+#     max_steps=hyp.max_steps_per_episode,
+# )
 
 # DQN Inputs and Outputs:
 # input: appended action (fingerprint_length + 1) .

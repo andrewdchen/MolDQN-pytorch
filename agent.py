@@ -10,7 +10,57 @@ from rdkit.Chem import QED
 from environment import Molecule
 from baselines.deepq import replay_buffer
 
+from torch_geometric.data import Data, Batch
+from graph_utils import mol_to_pyg_graph
+from general_utils import load_surrogate_model
+
 REPLAY_BUFFER_CAPACITY = hyp.replay_buffer_size
+
+
+###############################################
+#             Helper Functions                #
+###############################################
+
+def get_final_reward(state, env, surrogate_model, device):
+    # g = state_to_graph(state, env, keep_self_edges=False)
+    g = Batch().from_data_list([mol_to_pyg_graph(state)])
+    g = g.to(device)
+    with torch.autograd.no_grad():
+        pred_docking_score = surrogate_model(g, None)
+    reward = pred_docking_score.item() * -1
+    return reward
+
+###############################################
+
+class DockingRewardMolecule(Molecule):
+    """The molecule whose reward is the QED."""
+
+    def __init__(self, discount_factor, surrogate_model_path, **kwargs):
+        """Initializes the class.
+
+        Args:
+          discount_factor: Float. The discount factor. We only
+            care about the molecule at the end of modification.
+            In order to prevent a myopic decision, we discount
+            the reward at each step by a factor of
+            discount_factor ** num_steps_left,
+            this encourages exploration with emphasis on long term rewards.
+          **kwargs: The keyword arguments passed to the base class.
+        """
+        super(QEDRewardMolecule, self).__init__(**kwargs)
+        self.discount_factor = discount_factor
+        self.surrogate_model = load_surrogate_model("", "", surrogate_model_path)
+
+    def _reward(self):
+        """Reward of a state.
+
+        Returns:
+        Float. Docking reward of current state.
+        """
+        molecule = Chem.MolFromSmiles(self._state)
+        if molecule is None:
+            return 0.0
+        return get_final_reward(molecule, None, self.surrogate_model)
 
 
 class QEDRewardMolecule(Molecule):
@@ -78,15 +128,15 @@ class Agent(object):
         for i in range(batch_size):
             state = (
                 torch.FloatTensor(states[i])
-                .reshape(-1, hyp.fingerprint_length + 1)
-                .to(self.device)
+                    .reshape(-1, hyp.fingerprint_length + 1)
+                    .to(self.device)
             )
             q_t[i] = self.dqn(state)
 
             next_state = (
                 torch.FloatTensor(next_states[i])
-                .reshape(-1, hyp.fingerprint_length + 1)
-                .to(self.device)
+                    .reshape(-1, hyp.fingerprint_length + 1)
+                    .to(self.device)
             )
             v_tp1[i] = torch.max(self.target_dqn(next_state))
 
