@@ -99,6 +99,7 @@ for it in range(iterations):
     )
 
     next_state, reward, done = result
+    curr_smile = next_state
 
     # Compute number of steps left
     steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
@@ -133,9 +134,15 @@ for it in range(iterations):
 
     if done:
         final_reward = reward
+        
+        with open('molecule_gen/' + hyp.name + '_train.csv', 'a') as f:
+            row = ''.join(['{},'] * 2)[:-1] + '\n'
+            f.write(row.format(curr_smile, final_reward))
+
         if episodes != 0 and TENSORBOARD_LOG and len(batch_losses) != 0:
             writer.add_scalar("episode_reward", final_reward, episodes)
             writer.add_scalar("episode_loss", np.array(batch_losses).mean(), episodes)
+        
         if episodes != 0 and episodes % 2 == 0 and len(batch_losses) != 0:
             print(
                 "reward of final molecule at episode {} is {}".format(
@@ -162,6 +169,7 @@ for it in range(iterations):
 num_done = 0
 while True:
 
+    steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
     # Compute a list of all possible valid actions. (Here valid_actions stores the states after taking the possible actions)
     valid_actions = list(environment.get_valid_actions())
 
@@ -196,7 +204,7 @@ while True:
     )
 
     next_state, reward, done = result
-
+    curr_smile = next_state
     # Compute number of steps left
     steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
 
@@ -220,9 +228,9 @@ while True:
     if done:
         final_reward = reward
 
-        with open('molecule_gen/' + hyp.name + '.csv', 'a') as f:
+        with open('molecule_gen/' + hyp.name + '_eval.csv', 'a') as f:
             row = ''.join(['{},'] * 2)[:-1] + '\n'
-            f.write(row.format(next_state, final_reward))
+            f.write(row.format(curr_smile, final_reward))
 
         num_done += 1
         environment.initialize()
