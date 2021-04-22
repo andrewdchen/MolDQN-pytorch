@@ -1,6 +1,6 @@
 import torch
 from agent import Agent
-from agent import DockingRewardMolecule, Agent
+from agent import QEDRewardMolecule, DockingRewardMolecule, logPRewardMolecule, Agent
 import hyp
 import math
 import utils
@@ -23,7 +23,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-environment = DockingRewardMolecule(
+environment = logPRewardMolecule(
     discount_factor=hyp.discount_factor,
     atom_types=set(hyp.atom_types),
     init_mol=hyp.start_molecule,
@@ -32,7 +32,6 @@ environment = DockingRewardMolecule(
     allow_bonds_between_rings=hyp.allow_bonds_between_rings,
     allowed_ring_sizes=set(hyp.allowed_ring_sizes),
     max_steps=hyp.max_steps_per_episode,
-    surrogate_model_path=hyp.surrogate_model_path,
     device = device,
 )
 

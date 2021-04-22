@@ -7,6 +7,7 @@ import hyp
 from dqn import MolDQN
 from rdkit import Chem
 from rdkit.Chem import QED
+from rdkit.Chem.Descriptors import MolLogP
 from environment import Molecule
 from baselines.deepq import replay_buffer
 
@@ -62,6 +63,37 @@ class DockingRewardMolecule(Molecule):
         if molecule is None:
             return 0.0
         return get_final_reward(molecule, None, self.surrogate_model, self.device)
+
+
+class logPRewardMolecule(Molecule):
+    """The molecule whose reward is the QED."""
+
+    def __init__(self, discount_factor, **kwargs):
+        """Initializes the class.
+
+    Args:
+      discount_factor: Float. The discount factor. We only
+        care about the molecule at the end of modification.
+        In order to prevent a myopic decision, we discount
+        the reward at each step by a factor of
+        discount_factor ** num_steps_left,
+        this encourages exploration with emphasis on long term rewards.
+      **kwargs: The keyword arguments passed to the base class.
+    """
+        super(logPRewardMolecule, self).__init__(**kwargs)
+        self.discount_factor = discount_factor
+
+    def _reward(self):
+        """Reward of a state.
+
+    Returns:
+      Float. QED of the current state.
+    """
+        molecule = Chem.MolFromSmiles(self._state)
+        if molecule is None:
+            return 0.0
+        qed = MolLogP(molecule)
+        return qed * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 
 class QEDRewardMolecule(Molecule):
