@@ -14,6 +14,7 @@ from baselines.deepq import replay_buffer
 from torch_geometric.data import Data, Batch
 from graph_utils import mol_to_pyg_graph
 from general_utils import load_surrogate_model
+from reward.get_main_reward import get_main_reward
 
 REPLAY_BUFFER_CAPACITY = hyp.replay_buffer_size
 
@@ -32,6 +33,26 @@ def get_final_reward(state, env, surrogate_model, device):
     return reward
 
 ###############################################
+
+class plogPRewardMolecule(Molecule):
+    """The molecule whose reward is the QED."""
+
+    def __init__(self, discount_factor, **kwargs):
+        """Initializes the class.
+        """
+        super(plogPRewardMolecule, self).__init__(**kwargs)
+        self.discount_factor = discount_factor
+
+    def _reward(self):
+        """Reward of a state.
+
+        Returns:
+        Float. QED of the current state.
+        """
+        molecule = Chem.MolFromSmiles(self._state)
+        if molecule is None:
+            return 0.0
+        return get_main_reward(molecule, "plogp")
 
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the QED."""

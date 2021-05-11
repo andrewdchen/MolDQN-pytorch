@@ -1,6 +1,6 @@
 import torch
 from agent import Agent
-from agent import QEDRewardMolecule, DockingRewardMolecule, logPRewardMolecule, Agent
+from agent import QEDRewardMolecule, DockingRewardMolecule, logPRewardMolecule, plogPRewardMolecule, Agent
 import hyp
 import math
 import utils
@@ -23,7 +23,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-environment = logPRewardMolecule(
+environment = plogPRewardMolecule(
     discount_factor=hyp.discount_factor,
     atom_types=set(hyp.atom_types),
     init_mol=hyp.start_molecule,
@@ -32,7 +32,6 @@ environment = logPRewardMolecule(
     allow_bonds_between_rings=hyp.allow_bonds_between_rings,
     allowed_ring_sizes=set(hyp.allowed_ring_sizes),
     max_steps=hyp.max_steps_per_episode,
-    device = device,
 )
 
 # environment = QEDRewardMolecule(
@@ -163,6 +162,9 @@ for it in range(iterations):
             loss = agent.update_params(batch_size, hyp.gamma, hyp.polyak)
             loss = loss.item()
             batch_losses.append(loss)
+    
+    #if it % 10000 == 0:
+        #torch.save(agent, f"agent_{it}.pt")
 
 # Evaluation loop
 num_done = 0

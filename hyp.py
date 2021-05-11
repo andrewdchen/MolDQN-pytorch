@@ -18,4 +18,4 @@ fingerprint_length = 2048
 discount_factor = 0.9
 surrogate_model_path = "/clusterfs/csdata/data/surrogate_models/NSP15_combined1_upsample/predict_logp/best_model.pth"
 num_eval = 100
-name = "moldqn_dock3"
+name = "moldqn_plogp"
