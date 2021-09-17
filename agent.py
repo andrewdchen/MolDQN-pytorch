@@ -57,7 +57,7 @@ class plogPRewardMolecule(Molecule):
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the QED."""
 
-    def __init__(self, discount_factor, surrogate_model_path, device, **kwargs):
+    def __init__(self, discount_factor, **kwargs):
         """Initializes the class.
 
         Args:
@@ -71,19 +71,17 @@ class DockingRewardMolecule(Molecule):
         """
         super(DockingRewardMolecule, self).__init__(**kwargs)
         self.discount_factor = discount_factor
-        self.surrogate_model = load_surrogate_model("", "", surrogate_model_path, device)
-        self.device = device
 
     def _reward(self):
         """Reward of a state.
 
         Returns:
-        Float. Docking reward of current state.
+        Float. QED of the current state.
         """
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        return get_final_reward(molecule, None, self.surrogate_model, self.device)
+        return get_main_reward(molecule, "dock")
 
 
 class logPRewardMolecule(Molecule):

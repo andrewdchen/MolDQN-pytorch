@@ -27,6 +27,7 @@ from __future__ import print_function
 import collections
 import copy
 import itertools
+import random
 
 from rdkit import Chem
 from rdkit.Chem import Draw
@@ -417,7 +418,7 @@ class Molecule(object):
     """
         if state is None:
             if self._valid_actions and not force_rebuild:
-                return copy.deepcopy(self._valid_actions)
+                return copy.deepcopy(self.atom_types)
             state = self._state
         if isinstance(state, Chem.Mol):
             state = Chem.MolToSmiles(state)
@@ -475,8 +476,8 @@ class Molecule(object):
     """
         if self._counter >= self.max_steps or self._goal_reached():
             raise ValueError("This episode is terminated.")
-        if action not in self._valid_actions:
-            raise ValueError("Invalid action.")
+        #if action not in self._valid_actions:
+        #    raise ValueError("Invalid action.")
         self._state = action
         if self.record_path:
             self._path.append(self._state)
