@@ -1,6 +1,5 @@
 import torch
-from agent import Agent
-from agent import QEDRewardMolecule, DockingRewardMolecule, logPRewardMolecule, plogPRewardMolecule, Agent
+from agent import QEDRewardMolecule, DockingConstrainMolecule, plogPRewardMolecule, Agent
 import hyp
 import math
 import utils
@@ -11,6 +10,8 @@ from rdkit import DataStructs
 from rdkit.Chem import AllChem
 from torch.utils.tensorboard import SummaryWriter
 import os
+
+from reward.get_main_reward import get_main_reward
 
 TENSORBOARD_LOG = True
 TB_LOG_PATH = "./runs/dqn/run2"
@@ -27,8 +28,10 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-environment = DockingRewardMolecule(
+environment = DockingConstrainMolecule(
     discount_factor=hyp.discount_factor,
+    constrain_factor=hyp.constrain_factor,
+    delta=hyp.delta,
     atom_types=set(hyp.atom_types),
     init_mol=hyp.start_molecule,
     warm_start_dataset=hyp.warm_start_dataset,
@@ -76,6 +79,7 @@ environment.reset()
 eps_threshold = 1.0
 batch_losses = []
 start_smile = environment.state
+start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
 curr_smile = start_smile
 
 for it in range(iterations):
@@ -103,27 +107,30 @@ for it in range(iterations):
     # eps_threshold = hyp.epsilon_end + (hyp.epsilon_start - hyp.epsilon_end) * \
     #     math.exp(-1. * it / hyp.epsilon_decay)
 
-    a = agent.get_action(observations_tensor, eps_threshold)
+    acts = agent.get_actions(observations_tensor, eps_threshold)
+    if not isinstance(acts, list):
+        acts = [acts]
 
     # Find out the new state (we store the new state in "action" here. Bit confusing but taken from original implementation)
-    action = valid_actions[a]
+    actions = [valid_actions[a] for a in acts]
     # Take a step based on the action
-    result = environment.step(action)
+    result = environment.step(actions)
+
+    action, reward, raw_reward, done = result
+    curr_smile = action
+    curr_reward = raw_reward
 
     action_fingerprint = np.append(
         utils.get_fingerprint(action, hyp.fingerprint_length, hyp.fingerprint_radius),
         steps_left,
     )
 
-    next_state, reward, done = result
-    curr_smile = next_state
-
     # Compute number of steps left
     steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
 
     # Append steps_left to the new state and store in next_state
     next_state = utils.get_fingerprint(
-        next_state, hyp.fingerprint_length, hyp.fingerprint_radius
+        action, hyp.fingerprint_length, hyp.fingerprint_radius
     )  # (fingerprint_length)
 
     action_fingerprints = np.vstack(
@@ -150,23 +157,18 @@ for it in range(iterations):
     )
 
     if done:
-        final_reward = reward
-        curr_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(curr_smile), radius=2)
-        target_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(start_smile), radius=2)
-        sim = DataStructs.TanimotoSimilarity(target_fp, curr_fp)
-
         with open('molecule_gen/' + hyp.name + '_train.csv', 'a') as f:
             row = ''.join(['{},'] * 4)[:-1] + '\n'
-            f.write(row.format(start_smile, curr_smile, sim, final_reward))
+            f.write(row.format(start_smile, start_reward, curr_smile, curr_reward))
 
         if episodes != 0 and TENSORBOARD_LOG and len(batch_losses) != 0:
-            writer.add_scalar("episode_reward", np.array(final_reward), episodes)
+            writer.add_scalar("episode_reward", np.array(curr_reward), episodes)
             writer.add_scalar("episode_loss", np.array(batch_losses).mean(), episodes)
         
         if episodes != 0 and episodes % 2 == 0 and len(batch_losses) != 0:
             print(
                 "reward of final molecule at episode {} is {}".format(
-                    episodes, final_reward
+                    episodes, curr_reward
                 )
             )
             print(
@@ -175,10 +177,11 @@ for it in range(iterations):
                 )
             )
         episodes += 1
-        eps_threshold *= 0.99907
+        eps_threshold *= 0.999
         batch_losses = []
         environment.reset()
         start_smile = environment.state
+        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
         curr_smile = start_smile
 
     if it % update_interval == 0 and agent.replay_buffer.__len__() >= batch_size:
@@ -194,6 +197,7 @@ for it in range(iterations):
 num_done = 0
 environment.reset()
 start_smile = environment.state
+start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
 curr_smile = start_smile
 
 while True:
@@ -227,19 +231,21 @@ while True:
     # Take a step based on the action
     result = environment.step(action)
 
+    action, reward, raw_reward, done = result
+    curr_smile = action
+    curr_reward = raw_reward
+
     action_fingerprint = np.append(
         utils.get_fingerprint(action, hyp.fingerprint_length, hyp.fingerprint_radius),
         steps_left,
     )
 
-    next_state, reward, done = result
-    curr_smile = next_state
     # Compute number of steps left
     steps_left = hyp.max_steps_per_episode - environment.num_steps_taken
 
     # Append steps_left to the new state and store in next_state
     next_state = utils.get_fingerprint(
-        next_state, hyp.fingerprint_length, hyp.fingerprint_radius
+        action, hyp.fingerprint_length, hyp.fingerprint_radius
     )  # (fingerprint_length)
 
     action_fingerprints = np.vstack(
@@ -255,17 +261,15 @@ while True:
     )  # (num_actions, fingerprint_length + 1)
 
     if done:
-        final_reward = reward
-        curr_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(curr_smile), radius=2)
-        target_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(start_smile), radius=2)
-        sim = DataStructs.TanimotoSimilarity(target_fp, curr_fp)
         with open('molecule_gen/' + hyp.name + '_eval.csv', 'a') as f:
             row = ''.join(['{},'] * 4)[:-1] + '\n'
-            f.write(row.format(start_smile, curr_smile, sim, final_reward))
+            f.write(row.format(start_smile, curr_smile, start_reward, curr_reward))
 
         num_done += 1
+        eps_threshold *= 0.999
         environment.reset()
         start_smile = environment.state
+        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
         curr_smile = start_smile
 
     if num_done == hyp.num_eval:

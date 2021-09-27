@@ -1,2 +1,4 @@
 *__pycache__/
 .vscode/
+molecule_gen/
+runs/

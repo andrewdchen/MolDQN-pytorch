@@ -5,8 +5,8 @@ import torch.optim as opt
 import utils
 import hyp
 from dqn import MolDQN
-from rdkit import Chem
-from rdkit.Chem import QED
+from rdkit import Chem, DataStructs
+from rdkit.Chem import AllChem, QED
 from rdkit.Chem.Descriptors import MolLogP
 from environment import Molecule
 from baselines.deepq import replay_buffer
@@ -34,7 +34,8 @@ class plogPRewardMolecule(Molecule):
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        return get_main_reward(molecule, "plogp")
+        plogp = get_main_reward(molecule, "plogp")
+        return plogp * self.discount_factor ** (self.max_steps - self.num_steps_taken), plogp
 
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
@@ -63,12 +64,13 @@ class DockingRewardMolecule(Molecule):
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        return get_main_reward(molecule, "dock")
+        dock_reward = get_main_reward(molecule, "dock")[0]
+        return dock_reward * self.discount_factor ** (self.max_steps - self.num_steps_taken), dock_reward
 
 class DockingConstrainMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
 
-    def __init__(self, discount_factor, **kwargs):
+    def __init__(self, discount_factor, constrain_factor, delta, **kwargs):
         """Initializes the class.
 
         Args:
@@ -82,6 +84,8 @@ class DockingConstrainMolecule(Molecule):
         """
         super(DockingConstrainMolecule, self).__init__(**kwargs)
         self.discount_factor = discount_factor
+        self.constrain_factor = constrain_factor
+        self.delta = delta
 
     def _reward(self):
         """Reward of a state.
@@ -90,41 +94,19 @@ class DockingConstrainMolecule(Molecule):
         Float. Docking reward of the current state.
         """
         molecule = Chem.MolFromSmiles(self._state)
-        init_molecule = Chem.MolFromSmiles(self.init_mol)
         if molecule is None:
             return 0.0
-        return get_main_reward(molecule, "dock")
-
-
-class logPRewardMolecule(Molecule):
-    """The molecule whose reward is the QED."""
-
-    def __init__(self, discount_factor, **kwargs):
-        """Initializes the class.
-
-    Args:
-      discount_factor: Float. The discount factor. We only
-        care about the molecule at the end of modification.
-        In order to prevent a myopic decision, we discount
-        the reward at each step by a factor of
-        discount_factor ** num_steps_left,
-        this encourages exploration with emphasis on long term rewards.
-      **kwargs: The keyword arguments passed to the base class.
-    """
-        super(logPRewardMolecule, self).__init__(**kwargs)
-        self.discount_factor = discount_factor
-
-    def _reward(self):
-        """Reward of a state.
-
-    Returns:
-      Float. QED of the current state.
-    """
-        molecule = Chem.MolFromSmiles(self._state)
-        if molecule is None:
-            return 0.0
-        qed = MolLogP(molecule)
-        return qed * self.discount_factor ** (self.max_steps - self.num_steps_taken)
+        dock_reward = get_main_reward(molecule, "dock")[0]
+        if dock_reward == 0:
+            return 0, "invalid"
+        try:
+            curr_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(self._state), radius=2)
+            target_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(self.init_mol), radius=2)
+            sim = DataStructs.TanimotoSimilarity(target_fp, curr_fp)
+        except Exception as e:
+            sim = 0.0
+        reward = dock_reward + self.constrain_factor * max(0, self.delta - sim)
+        return reward * self.discount_factor ** (self.max_steps - self.num_steps_taken), dock_reward
 
 
 class QEDRewardMolecule(Molecule):
@@ -177,10 +159,21 @@ class Agent(object):
         if np.random.uniform() < epsilon_threshold:
             action = np.random.randint(0, observations.shape[0])
         else:
-            q_value = self.dqn.forward(observations.to(self.device)).cpu()
+            q_value = self.dqn.forward(observations.to(self.device)).cpu().detach()
             action = torch.argmax(q_value).numpy()
 
-        return action
+        return action.tolist()
+
+    def get_actions(self, observations, epsilon_threshold, num_actions=5):
+        num_actions = min(observations.shape[0], num_actions)
+
+        if np.random.uniform() < epsilon_threshold:
+            actions = np.random.choice(observations.shape[0], num_actions)
+        else:
+            q_value = self.dqn.forward(observations.to(self.device)).cpu().detach()
+            actions = q_value.squeeze().numpy().argsort()[-num_actions:][::-1]
+
+        return actions.tolist()
 
     def update_params(self, batch_size, gamma, polyak):
         # update target network

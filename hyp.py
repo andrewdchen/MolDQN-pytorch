@@ -19,3 +19,5 @@ discount_factor = 0.9
 num_eval = 800
 name = "moldqn_autodock_const_opt_2"
 warm_start_dataset = "dataset/NSP15_6W01_A_3_H.negonly_unique_30k.csv"
+constrain_factor = 10.0
+delta = 0.2

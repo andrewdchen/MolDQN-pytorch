@@ -38,12 +38,13 @@ import utils
 from dataset import preprocess
 
 
-class Result(collections.namedtuple("Result", ["state", "reward", "terminated"])):
+class Result(collections.namedtuple("Result", ["state", "reward", "raw_reward", "terminated"])):
     """A namedtuple defines the result of a step for the molecule class.
 
     The namedtuple contains the following fields:
       state: Chem.RWMol. The molecule reached after taking the action.
       reward: Float. The reward get after taking the action.
+      raw_reward: Float. The raw reward get after taking the action.
       terminated: Boolean. Whether this episode is terminated.
   """
 
@@ -411,9 +412,11 @@ class Molecule(object):
           return 
         if state is None:
           idx = random.randrange(len(self.scores))
-          self._state = self.smiles[idx]
+          state = self.smiles[idx]
         if isinstance(state, Chem.Mol):
-            self._state = Chem.MolToSmiles(state)
+          state = Chem.MolToSmiles(state)
+        self.init_mol = state
+        self._state = state
         if self.record_path:
             self._path = [self._state]
         self._valid_actions = self.get_valid_actions(force_rebuild=True)
@@ -478,7 +481,7 @@ class Molecule(object):
             return False
         return self._target_fn(self._state)
 
-    def step(self, action):
+    def step(self, actions):
         """Takes a step forward according to the action.
 
     Args:
@@ -497,16 +500,23 @@ class Molecule(object):
     """
         if self._counter >= self.max_steps or self._goal_reached():
             raise ValueError("This episode is terminated.")
-        if action not in self._valid_actions:
-            raise ValueError("Invalid action.")
-        self._state = action
+        if not isinstance(actions, list):
+            actions = [actions]
+        for action in actions:
+            if action not in self._valid_actions:
+                raise ValueError("Invalid action.")
+            self._state = action
+            reward, raw_reward = self._reward()
+            if not isinstance(raw_reward, str):
+                break
         if self.record_path:
             self._path.append(self._state)
         self._valid_actions = self.get_valid_actions(force_rebuild=True)
         self._counter += 1
         result = Result(
             state=self._state,
-            reward=self._reward(),
+            reward=reward,
+            raw_reward=raw_reward,
             terminated=(self._counter >= self.max_steps) or self._goal_reached(),
         )
         return result
