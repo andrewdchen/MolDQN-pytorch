@@ -11,28 +11,10 @@ from rdkit.Chem.Descriptors import MolLogP
 from environment import Molecule
 from baselines.deepq import replay_buffer
 
-from torch_geometric.data import Data, Batch
-from graph_utils import mol_to_pyg_graph
-from general_utils import load_surrogate_model
 from reward.get_main_reward import get_main_reward
 
 REPLAY_BUFFER_CAPACITY = hyp.replay_buffer_size
 
-
-###############################################
-#             Helper Functions                #
-###############################################
-
-def get_final_reward(state, env, surrogate_model, device):
-    # g = state_to_graph(state, env, keep_self_edges=False)
-    g = Batch().from_data_list([mol_to_pyg_graph(state)])
-    g = g.to(device)
-    with torch.autograd.no_grad():
-        pred_docking_score = surrogate_model(g, None)
-    reward = pred_docking_score.item() * -1
-    return reward
-
-###############################################
 
 class plogPRewardMolecule(Molecule):
     """The molecule whose reward is the QED."""
@@ -55,7 +37,7 @@ class plogPRewardMolecule(Molecule):
         return get_main_reward(molecule, "plogp")
 
 class DockingRewardMolecule(Molecule):
-    """The molecule whose reward is the QED."""
+    """The molecule whose reward is the docking reward."""
 
     def __init__(self, discount_factor, **kwargs):
         """Initializes the class.
@@ -76,9 +58,39 @@ class DockingRewardMolecule(Molecule):
         """Reward of a state.
 
         Returns:
-        Float. QED of the current state.
+        Float. Docking reward of the current state.
         """
         molecule = Chem.MolFromSmiles(self._state)
+        if molecule is None:
+            return 0.0
+        return get_main_reward(molecule, "dock")
+
+class DockingConstrainMolecule(Molecule):
+    """The molecule whose reward is the docking reward."""
+
+    def __init__(self, discount_factor, **kwargs):
+        """Initializes the class.
+
+        Args:
+          discount_factor: Float. The discount factor. We only
+            care about the molecule at the end of modification.
+            In order to prevent a myopic decision, we discount
+            the reward at each step by a factor of
+            discount_factor ** num_steps_left,
+            this encourages exploration with emphasis on long term rewards.
+          **kwargs: The keyword arguments passed to the base class.
+        """
+        super(DockingConstrainMolecule, self).__init__(**kwargs)
+        self.discount_factor = discount_factor
+
+    def _reward(self):
+        """Reward of a state.
+
+        Returns:
+        Float. Docking reward of the current state.
+        """
+        molecule = Chem.MolFromSmiles(self._state)
+        init_molecule = Chem.MolFromSmiles(self.init_mol)
         if molecule is None:
             return 0.0
         return get_main_reward(molecule, "dock")

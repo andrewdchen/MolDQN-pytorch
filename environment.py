@@ -35,6 +35,7 @@ from six.moves import range
 from six.moves import zip
 
 import utils
+from dataset import preprocess
 
 
 class Result(collections.namedtuple("Result", ["state", "reward", "terminated"])):
@@ -321,6 +322,7 @@ class Molecule(object):
         self,
         atom_types,
         init_mol=None,
+        warm_start_dataset=None,
         allow_removal=True,
         allow_no_modification=True,
         allow_bonds_between_rings=True,
@@ -360,6 +362,10 @@ class Molecule(object):
         if isinstance(init_mol, Chem.Mol):
             init_mol = Chem.MolToSmiles(init_mol)
         self.init_mol = init_mol
+        if warm_start_dataset:
+          self.scores, self.smiles = preprocess.main(warm_start_dataset)
+        else:
+          self.scores, self.smiles = None, None
         self.atom_types = atom_types
         self.allow_removal = allow_removal
         self.allow_no_modification = allow_no_modification
@@ -398,6 +404,21 @@ class Molecule(object):
         self._valid_actions = self.get_valid_actions(force_rebuild=True)
         self._counter = 0
 
+    def reset(self, state=None):
+        """Resets the MDP to its initial state."""
+        if self.scores is None:
+          self.initialize()
+          return 
+        if state is None:
+          idx = random.randrange(len(self.scores))
+          self._state = self.smiles[idx]
+        if isinstance(state, Chem.Mol):
+            self._state = Chem.MolToSmiles(state)
+        if self.record_path:
+            self._path = [self._state]
+        self._valid_actions = self.get_valid_actions(force_rebuild=True)
+        self._counter = 0
+
     def get_valid_actions(self, state=None, force_rebuild=False):
         """Gets the valid actions for the state.
 
@@ -418,7 +439,7 @@ class Molecule(object):
     """
         if state is None:
             if self._valid_actions and not force_rebuild:
-                return copy.deepcopy(self.atom_types)
+                return copy.deepcopy(self._valid_actions)
             state = self._state
         if isinstance(state, Chem.Mol):
             state = Chem.MolToSmiles(state)
@@ -476,8 +497,8 @@ class Molecule(object):
     """
         if self._counter >= self.max_steps or self._goal_reached():
             raise ValueError("This episode is terminated.")
-        #if action not in self._valid_actions:
-        #    raise ValueError("Invalid action.")
+        if action not in self._valid_actions:
+            raise ValueError("Invalid action.")
         self._state = action
         if self.record_path:
             self._path.append(self._state)

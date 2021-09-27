@@ -16,6 +16,6 @@ gamma = 0.95
 fingerprint_radius = 3
 fingerprint_length = 2048
 discount_factor = 0.9
-surrogate_model_path = "/clusterfs/csdata/data/andrew_embed_models/NSP15_combined1_upsample/predict_logp/best_model.pth"
 num_eval = 800
 name = "moldqn_autodock_const_opt_2"
+warm_start_dataset = "dataset/NSP15_6W01_A_3_H.negonly_unique_30k.csv"
