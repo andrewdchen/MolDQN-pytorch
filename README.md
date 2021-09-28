@@ -12,18 +12,24 @@ by Zhenpeng Zhou, Steven Kearnes, Li Li, Richard N. Zare and Patrick Riley.
 
 1) Install `rdkit`.
    `conda create -c rdkit -n moldqn-env rdkit python=3.6`
+
    `conda activate moldqn-env`
+
    `conda install -c conda-forge rdkit`
    
 2) Clone this repository.
    `git clone https://https://github.com/andrewdchen/MolDQN-pytorch`
+
    `cd MolDQN-pytorch`
+
    `git checkout -b constrain_opt origin/constrain_opt`
    
 3) Install the requirements given in `requirements.txt`.
+
    `pip install -r requirements.txt`
    
 4) Install `baselines`.
+
    `pip install "git+https://github.com/openai/baselines.git"`
    
 ## From Docker:
