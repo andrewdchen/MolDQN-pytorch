@@ -35,7 +35,7 @@ class plogPRewardMolecule(Molecule):
         if molecule is None:
             return 0.0
         plogp = get_main_reward(molecule, "plogp")
-        return plogp * self.discount_factor ** (self.max_steps - self.num_steps_taken), plogp
+        return plogp * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
@@ -65,7 +65,7 @@ class DockingRewardMolecule(Molecule):
         if molecule is None:
             return 0.0
         dock_reward = get_main_reward(molecule, "dock")[0]
-        return dock_reward * self.discount_factor ** (self.max_steps - self.num_steps_taken), dock_reward
+        return dock_reward * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 class DockingConstrainMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
@@ -87,6 +87,9 @@ class DockingConstrainMolecule(Molecule):
         self.constrain_factor = constrain_factor
         self.delta = delta
 
+        self.dock_reward = 0
+        self.sim = 0
+
     def _reward(self):
         """Reward of a state.
 
@@ -98,15 +101,17 @@ class DockingConstrainMolecule(Molecule):
             return 0.0
         dock_reward = get_main_reward(molecule, "dock")[0]
         if dock_reward == 0:
-            return 0, "invalid"
+            return "invalid"
+        self.dock_reward = dock_reward
         try:
             curr_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(self._state), radius=2)
             target_fp = AllChem.GetMorganFingerprint(Chem.MolFromSmiles(self.init_mol), radius=2)
             sim = DataStructs.TanimotoSimilarity(target_fp, curr_fp)
         except Exception as e:
             sim = 0.0
+        self.sim = sim
         reward = dock_reward + self.constrain_factor * max(0, self.delta - sim)
-        return reward * self.discount_factor ** (self.max_steps - self.num_steps_taken), dock_reward
+        return reward * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 
 class QEDRewardMolecule(Molecule):

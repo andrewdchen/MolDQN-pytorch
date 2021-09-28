@@ -38,13 +38,12 @@ import utils
 from dataset import preprocess
 
 
-class Result(collections.namedtuple("Result", ["state", "reward", "raw_reward", "terminated"])):
+class Result(collections.namedtuple("Result", ["state", "reward", "terminated"])):
     """A namedtuple defines the result of a step for the molecule class.
 
     The namedtuple contains the following fields:
       state: Chem.RWMol. The molecule reached after taking the action.
       reward: Float. The reward get after taking the action.
-      raw_reward: Float. The raw reward get after taking the action.
       terminated: Boolean. Whether this episode is terminated.
   """
 
@@ -506,9 +505,11 @@ class Molecule(object):
             if action not in self._valid_actions:
                 raise ValueError("Invalid action.")
             self._state = action
-            reward, raw_reward = self._reward()
-            if not isinstance(raw_reward, str):
+            reward = self._reward()
+            if not isinstance(reward, str):
                 break
+        if isinstance(reward, str):
+            reward = 0.0
         if self.record_path:
             self._path.append(self._state)
         self._valid_actions = self.get_valid_actions(force_rebuild=True)
@@ -516,7 +517,6 @@ class Molecule(object):
         result = Result(
             state=self._state,
             reward=reward,
-            raw_reward=raw_reward,
             terminated=(self._counter >= self.max_steps) or self._goal_reached(),
         )
         return result

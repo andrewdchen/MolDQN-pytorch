@@ -2,3 +2,5 @@
 .vscode/
 molecule_gen/
 runs/
+*autodockgpu/
+log/

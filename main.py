@@ -24,7 +24,7 @@ num_updates_per_it = 1
 os.makedirs('molecule_gen', exist_ok=True)
 
 if torch.cuda.is_available():
-    device = torch.device("cuda:2")
+    device = torch.device("cuda:%d" % hyp.gpu)
 else:
     device = torch.device("cpu")
 
@@ -116,9 +116,10 @@ for it in range(iterations):
     # Take a step based on the action
     result = environment.step(actions)
 
-    action, reward, raw_reward, done = result
+    action, reward, done = result
     curr_smile = action
-    curr_reward = raw_reward
+    curr_reward = environment.dock_reward
+    curr_sim = environment.sim
 
     action_fingerprint = np.append(
         utils.get_fingerprint(action, hyp.fingerprint_length, hyp.fingerprint_radius),
@@ -158,8 +159,8 @@ for it in range(iterations):
 
     if done:
         with open('molecule_gen/' + hyp.name + '_train.csv', 'a') as f:
-            row = ''.join(['{},'] * 4)[:-1] + '\n'
-            f.write(row.format(start_smile, start_reward, curr_smile, curr_reward))
+            row = ''.join(['{},'] * 5)[:-1] + '\n'
+            f.write(row.format(start_smile, curr_smile, curr_reward, curr_reward - start_reward, curr_sim))
 
         if episodes != 0 and TENSORBOARD_LOG and len(batch_losses) != 0:
             writer.add_scalar("episode_reward", np.array(curr_reward), episodes)
@@ -231,9 +232,10 @@ while True:
     # Take a step based on the action
     result = environment.step(action)
 
-    action, reward, raw_reward, done = result
+    action, reward, done = result
     curr_smile = action
-    curr_reward = raw_reward
+    curr_reward = environment.dock_reward
+    curr_sim = environment.sim
 
     action_fingerprint = np.append(
         utils.get_fingerprint(action, hyp.fingerprint_length, hyp.fingerprint_radius),
@@ -262,8 +264,8 @@ while True:
 
     if done:
         with open('molecule_gen/' + hyp.name + '_eval.csv', 'a') as f:
-            row = ''.join(['{},'] * 4)[:-1] + '\n'
-            f.write(row.format(start_smile, curr_smile, start_reward, curr_reward))
+            row = ''.join(['{},'] * 5)[:-1] + '\n'
+            f.write(row.format(start_smile, curr_smile, curr_reward, curr_reward - start_reward, curr_sim))
 
         num_done += 1
         eps_threshold *= 0.999
