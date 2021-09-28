@@ -10,20 +10,21 @@ by Zhenpeng Zhou, Steven Kearnes, Li Li, Richard N. Zare and Patrick Riley.
 
 ## <a name="source"></a>From source:
 
-1) Install `rdkit`.  
-   `conda create -c rdkit -n my-rdkit-env rdkit`  
-   `conda activate my-rdkit-env`  
-   `conda install -c conda-forge rdkit`  
+1) Install `rdkit`.
+   `conda create -c rdkit -n moldqn-env rdkit python=3.6`
+   `conda activate moldqn-env`
+   `conda install -c conda-forge rdkit`
    
-2) Clone this repository.  
-   `git clone https://github.com/aksub99/MolDQN-pytorch.git`  
+2) Clone this repository.
+   `git clone https://https://github.com/andrewdchen/MolDQN-pytorch`
    `cd MolDQN-pytorch`
+   `git checkout -b constrain_opt origin/constrain_opt`
    
-3) Install the requirements given in `requirements.txt`.  
-   `pip install -r requirements.txt`  
+3) Install the requirements given in `requirements.txt`.
+   `pip install -r requirements.txt`
    
-4) Install `baselines`.  
-   `pip install "git+https://github.com/openai/baselines.git"`  
+4) Install `baselines`.
+   `pip install "git+https://github.com/openai/baselines.git"`
    
 ## From Docker:
 
@@ -39,6 +40,8 @@ nvidia-docker run -[Options] moldqn_pytorch:latest python path/to/main.py
 ```
 Please remember to modify the `TB_LOG_PATH` variable in `main.py` depending on where you wish to store your tensorboard runs file.
 ## Training the MolDQN:
+
+Change parameter `delta` and `name` in `hyp.py`, then run
 
 `python main.py`
 
