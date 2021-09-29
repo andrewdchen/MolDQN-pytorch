@@ -20,5 +20,5 @@ num_eval = 800
 warm_start_dataset = "dataset/NSP15_6W01_A_3_H.negonly_unique_30k.csv"
 constrain_factor = 10.0
 delta = 0.2 # 0, 0.2, 0.4, 0.6
-gpu = 0
+gpu = 2
 name = "moldqn_autodock_const_opt_2" # opt_0, opt_0.2, opt_0.4, opt_0.6

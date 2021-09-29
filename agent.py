@@ -110,7 +110,7 @@ class DockingConstrainMolecule(Molecule):
         except Exception as e:
             sim = 0.0
         self.sim = sim
-        reward = dock_reward + self.constrain_factor * max(0, self.delta - sim)
+        reward = dock_reward - self.constrain_factor * max(0, self.delta - sim)
         return reward * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 
