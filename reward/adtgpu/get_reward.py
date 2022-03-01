@@ -27,7 +27,8 @@ def get_dock_score(states, args=None):
     if not isinstance(states, list):
         states = [states]
     smiles = [Chem.MolToSmiles(mol) for mol in states]
-    print(len(smiles))
+    smile_count=len(smiles)
+    print("Number of smiles to score: {}".format(smile_count))
 
     #Debugging flag
     DEBUG=False
@@ -69,13 +70,13 @@ def get_dock_score(states, args=None):
         #Verify SMILES is valid
         my_mol = Chem.MolFromSmiles(smile,sanitize=False)
         if my_mol is None:
-            print('invalid SMILES')
+            print("invalid SMILES: {}".format(smiles))
             VALID=False
         else:
             try:
                 Chem.SanitizeMol(my_mol)
             except:
-                print('invalid chemistry')
+                print("invalid chemistry: {}".format(smile))
                 VALID=False
 
         if(VALID):
@@ -88,7 +89,7 @@ def get_dock_score(states, args=None):
                 my_embedded_mol = Chem.RemoveHs(my_mol_with_H)
                 #print("Printing MolToPDBBlock:\n".format(Chem.MolToPDBBlock(my_embedded_mol))
             except:
-                print('other SMILES error')
+                print("other SMILES error: {}".format(smile))
                 VALID=False   
  
         if(VALID): 
@@ -115,55 +116,61 @@ def get_dock_score(states, args=None):
         else: #invalid SMILES
             ligs_list.append(None)
         sm_counter+=1
-    if(DEBUG): print("ligs_list:\n{}".format(ligs_list))
+    print("ligs_list:\n{}".format(ligs_list))
 
-    #Get stub name of receptor and field file
-    receptor_dir='/'.join(receptor_file.split('/')[:-1])
-    receptor_stub=receptor_file.split('/')[-1][:-6] #rm .pdbqt=6
-    if(DEBUG): print("\nReceptor dir:  {}".format(receptor_dir))
-    if(DEBUG): print("Receptor stub: {}".format(receptor_stub))
-    receptor_field=receptor_stub+".maps.fld"
+    pred_docking_score=[]
+    if(len(ligs_list)>0 and not all(x==None for x in ligs_list)):#TODO refactor this
+        #Get stub name of receptor and field file
+        receptor_dir='/'.join(receptor_file.split('/')[:-1])
+        receptor_stub=receptor_file.split('/')[-1][:-6] #rm .pdbqt=6
+        if(DEBUG): print("\nReceptor dir:  {}".format(receptor_dir))
+        if(DEBUG): print("Receptor stub: {}".format(receptor_stub))
+        receptor_field=receptor_stub+".maps.fld"
 
-    #Create run file for Autodock-gpu
-    run_file=run_dir+"/ligs_list.runfile"
-    run_file_lbl="ligs_list.runfile"
-    with open(run_file,'w') as f:
-        f.write(receptor_field+'\n')
+        #Create run file for Autodock-gpu
+        run_file=run_dir+"/ligs_list.runfile"
+        run_file_lbl="ligs_list.runfile"
+        with open(run_file,'w') as f:
+            f.write(receptor_field+'\n')
+            for lig in ligs_list:
+                if lig != None:
+                    f.write("ligands/"+lig+".pdbqt\n")
+                    f.write("ligands/"+lig+'\n')
+
+        #Copy map files to run dir
+        cmd="cp "+receptor_dir+"/"+receptor_stub+"* "+run_dir
+        if(DEBUG): print("\nCopy cmd to run: {}".format(cmd))
+        if(DEBUG): subprocess.Popen(cmd,shell=True).wait()
+        else: subprocess.Popen(cmd,shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).wait()
+
+        #Set up autodock-gpu run command
+        cmd=adt_path + " -filelist "+run_file_lbl+" -nrun 10"
+        if(DEBUG): print("\nAutodock cmd to run: {}".format(cmd))
+
+        #Run autodock-gpu (in run_dir and move back)
+        cur_dir=os.getcwd()
+        os.chdir(run_dir)
+        if(DEBUG): subprocess.Popen(cmd,shell=True).wait()
+        else: subprocess.Popen(cmd,shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).wait()
+        os.chdir(cur_dir)
+
+        #Read final scores into list
         for lig in ligs_list:
             if lig != None:
-                f.write("ligands/"+lig+".pdbqt\n")
-                f.write("ligands/"+lig+'\n')
-
-    #Copy map files to run dir
-    cmd="cp "+receptor_dir+"/"+receptor_stub+"* "+run_dir
-    if(DEBUG): print("\nCopy cmd to run: {}".format(cmd))
-    if(DEBUG): subprocess.Popen(cmd,shell=True).wait()
-    else: subprocess.Popen(cmd,shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).wait()
-
-    #Set up autodock-gpu run command
-    cmd=adt_path + " -filelist "+run_file_lbl+" -nrun 10"
-    if(DEBUG): print("\nAutodock cmd to run: {}".format(cmd))
-
-    #Run autodock-gpu (in run_dir and move back)
-    cur_dir=os.getcwd()
-    os.chdir(run_dir)
-    if(DEBUG): subprocess.Popen(cmd,shell=True).wait()
-    else: subprocess.Popen(cmd,shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).wait()
-    os.chdir(cur_dir)
-
-    #Read final scores into list
-    pred_docking_score=[]
-    for lig in ligs_list:
-        if lig != None:
-            #Parse for final score
-            lig_path=run_dir+ligands_dir+"/"+lig+".dlg"
-            if not os.path.exists(lig_path):
-                print("ERROR: No such file {}".format(lig_path))
-            else: 
-                grep_cmd = "grep -2 \"^Rank \" "+lig_path+" | head -5 | tail -1 | cut -d \'|\' -f2 | sed \'s/ //g\'"
-                grep_out=os.popen(grep_cmd).read()
-                pred_docking_score.append(-float(grep_out.strip()))
-        else:#invalid SMILES
+                #Parse for final score
+                lig_path=run_dir+ligands_dir+"/"+lig+".dlg"
+                if not os.path.exists(lig_path):
+                    print("ERROR: No such file {}".format(lig_path))
+                    pred_docking_score.append(0.0)
+                else: 
+                    grep_cmd = "grep -2 \"^Rank \" "+lig_path+" | head -5 | tail -1 | cut -d \'|\' -f2 | sed \'s/ //g\'"
+                    grep_out=os.popen(grep_cmd).read()
+                    pred_docking_score.append(-float(grep_out.strip()))
+            else:#invalid SMILES
+                pred_docking_score.append(0.00)
+    else:#ligs list is empty
+        print("Warning: ligs_list is empty or all None, zeroing all scores...")
+        for s in range(0,smile_count):
             pred_docking_score.append(0.00)
 
     shutil.rmtree(run_dir, ignore_errors=True)

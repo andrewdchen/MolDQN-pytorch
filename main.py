@@ -32,6 +32,7 @@ environment = DockingConstrainMolecule(
     discount_factor=hyp.discount_factor,
     constrain_factor=hyp.constrain_factor,
     delta=hyp.delta,
+    hyp=hyp,
     atom_types=set(hyp.atom_types),
     init_mol=hyp.start_molecule,
     warm_start_dataset=hyp.warm_start_dataset,
@@ -79,7 +80,7 @@ environment.reset()
 eps_threshold = 1.0
 batch_losses = []
 start_smile = environment.state
-start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
+start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock", args=hyp)[0]
 curr_smile = start_smile
 
 for it in range(iterations):
@@ -182,7 +183,7 @@ for it in range(iterations):
         batch_losses = []
         environment.reset()
         start_smile = environment.state
-        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
+        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock", args=hyp)[0]
         curr_smile = start_smile
 
     if it % update_interval == 0 and agent.replay_buffer.__len__() >= batch_size:
@@ -198,7 +199,7 @@ for it in range(iterations):
 num_done = 0
 environment.reset()
 start_smile = environment.state
-start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
+start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock", args=hyp)[0]
 curr_smile = start_smile
 
 while True:
@@ -271,7 +272,7 @@ while True:
         eps_threshold *= 0.999
         environment.reset()
         start_smile = environment.state
-        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock")[0]
+        start_reward = get_main_reward(Chem.MolFromSmiles(start_smile), "dock", args=hyp)[0]
         curr_smile = start_smile
 
     if num_done == hyp.num_eval:

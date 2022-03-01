@@ -40,7 +40,7 @@ class plogPRewardMolecule(Molecule):
 class DockingRewardMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
 
-    def __init__(self, discount_factor, **kwargs):
+    def __init__(self, discount_factor, hyp, **kwargs):
         """Initializes the class.
 
         Args:
@@ -54,6 +54,7 @@ class DockingRewardMolecule(Molecule):
         """
         super(DockingRewardMolecule, self).__init__(**kwargs)
         self.discount_factor = discount_factor
+        self.hyp = hyp
 
     def _reward(self):
         """Reward of a state.
@@ -64,13 +65,13 @@ class DockingRewardMolecule(Molecule):
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        dock_reward = get_main_reward(molecule, "dock")[0]
+        dock_reward = get_main_reward(molecule, "dock", args=self.hyp)[0]
         return dock_reward * self.discount_factor ** (self.max_steps - self.num_steps_taken)
 
 class DockingConstrainMolecule(Molecule):
     """The molecule whose reward is the docking reward."""
 
-    def __init__(self, discount_factor, constrain_factor, delta, **kwargs):
+    def __init__(self, discount_factor, constrain_factor, delta, hyp, **kwargs):
         """Initializes the class.
 
         Args:
@@ -86,6 +87,7 @@ class DockingConstrainMolecule(Molecule):
         self.discount_factor = discount_factor
         self.constrain_factor = constrain_factor
         self.delta = delta
+        self.hyp = hyp
 
         self.dock_reward = 0
         self.sim = 0
@@ -99,7 +101,7 @@ class DockingConstrainMolecule(Molecule):
         molecule = Chem.MolFromSmiles(self._state)
         if molecule is None:
             return 0.0
-        dock_reward = get_main_reward(molecule, "dock")[0]
+        dock_reward = get_main_reward(molecule, "dock", args=self.hyp)[0]
         if dock_reward == 0:
             return "invalid"
         self.dock_reward = dock_reward
